@@ -1,7 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { motion } from "framer-motion";
-import { ArrowUpRight, BrainCircuit, Compass, Eye, Gauge, Menu, RotateCcw, Sparkles, Target, X } from "lucide-react";
+import { ArrowUpRight, BrainCircuit, Check, Compass, Eye, Gauge, Menu, RotateCcw, Sparkles, Target, X } from "lucide-react";
 import "@/App.css";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -12,12 +12,24 @@ function App() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [audience, setAudience] = useState("Independent makers who are tired of same-shaped tools.");
+  const [constraints, setConstraints] = useState("Must feel opinionated, human, and useful in one sentence.");
+  const [workflow, setWorkflow] = useState(null);
+  const [activeStage, setActiveStage] = useState(0);
 
   const analyze = async () => {
     if (!idea.trim()) return;
     setLoading(true);
     try { const { data } = await axios.post(`${API}/analyze`, { idea }); setResult(data); }
     catch (error) { setResult({ score: 0, verdict: "Engine paused", diagnosis: "The signal could not be reached. Try again in a moment.", signals: [], unlocks: [], distinct_concept: "" }); }
+    finally { setLoading(false); }
+  };
+
+  const buildBrandSystem = async () => {
+    if (!idea.trim()) return;
+    setLoading(true);
+    try { const { data } = await axios.post(`${API}/workflow`, { idea, audience, constraints }); setWorkflow(data); setActiveStage(0); }
+    catch (error) { setWorkflow({ error: "The six-stage engine is temporarily unavailable. Try again shortly." }); }
     finally { setLoading(false); }
   };
 
@@ -47,7 +59,9 @@ function App() {
             <div className="panel-head"><div><span className="index">01</span><h2>Place your idea<br /><em>under the lens.</em></h2></div><Eye size={21} className="muted-icon" /></div>
             <label htmlFor="idea-input">RAW MATERIAL / THE UNEDITED THOUGHT</label>
             <textarea id="idea-input" data-testid="idea-input" value={idea} onChange={(e) => setIdea(e.target.value)} placeholder="Write the idea as it exists in your head..." />
-            <div className="input-footer"><span>{idea.length} / 500</span><button className="analyze-button" onClick={analyze} disabled={loading} data-testid="analyze-idea-button">{loading ? "READING SIGNAL..." : "RUN DIAGNOSTICS"}<ArrowUpRight size={17} /></button></div>
+            <label htmlFor="audience-input">WHO IS IT FOR / THE HUMAN ON THE OTHER SIDE</label><input id="audience-input" data-testid="audience-input" value={audience} onChange={(e) => setAudience(e.target.value)} />
+            <label htmlFor="constraints-input">NON-NEGOTIABLE / THE SHARP EDGE</label><input id="constraints-input" data-testid="constraints-input" value={constraints} onChange={(e) => setConstraints(e.target.value)} />
+            <div className="input-footer"><span>{idea.length} / 500</span><div className="action-pair"><button className="secondary-button" onClick={analyze} disabled={loading} data-testid="analyze-idea-button">QUICK READ</button><button className="analyze-button" onClick={buildBrandSystem} disabled={loading} data-testid="build-brand-system-button">{loading ? "BUILDING..." : "BUILD BRAND SYSTEM"}<ArrowUpRight size={17} /></button></div></div>
           </motion.section>
           <motion.section className="signal-panel" initial={{ opacity: 0, scale: .96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: .25 }}>
             <div className="orb-wrap"><div className="orb"><div className="orb-core" /><div className="orbit orbit-a" /><div className="orbit orbit-b" /></div><span className="orb-tag">SIGNAL<br />FIELD</span></div>
@@ -56,7 +70,7 @@ function App() {
         </div>
         <motion.section className="results-area" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .4 }}>
           <div className="section-heading"><div><span className="eyebrow">{result ? "02 / DIAGNOSTIC REPORT" : "02 / THE DIAGNOSTIC REPORT"}</span><h2>{result ? "Here is what the engine sees." : "Nothing generic survives a closer look."}</h2></div>{result && <button className="reset-button" onClick={() => setResult(null)} data-testid="reset-analysis-button"><RotateCcw size={15} /> RESET</button>}</div>
-          {!result ? <div className="empty-report" data-testid="empty-report"><Target size={24} /><span>Run diagnostics to surface the hidden structure of your idea.</span></div> : <div className="report-grid" data-testid="analysis-report"><div className="score-card glass"><span className="index">DISTINCTION INDEX</span><div className="score">{result.score}<small>/100</small></div><div className="score-bar"><span style={{ width: `${result.score}%` }} /></div><p>{result.verdict}</p></div><div className="diagnosis-card glass"><span className="index">THE READ</span><p className="diagnosis">{result.diagnosis}</p><div className="signal-list">{result.signals.map((signal) => <div className="signal-row" key={signal.label}><span>{signal.label}</span><div className="mini-bar"><i style={{ width: `${signal.value}%` }} /></div><b>{signal.value}</b></div>)}</div></div><div className="unlock-card"><span className="index">NEXT UNLOCKS</span>{result.unlocks.map((unlock, i) => <div className="unlock" key={unlock}><span>0{i + 1}</span>{unlock}<ArrowUpRight size={15} /></div>)}</div><div className="concept-card"><span className="index">DISTINCTIVE CONCEPT / GENERATED</span><p>{result.distinct_concept}</p><button data-testid="save-concept-button">SAVE TO PLAYGROUND <ArrowUpRight size={16} /></button></div></div>}
+          {workflow ? <div className="workflow-report" data-testid="workflow-report">{workflow.error ? <div className="empty-report">{workflow.error}</div> : <><div className="stage-rail">{workflow.stages.map((stage, index) => <button className={activeStage === index ? "stage-tab active" : "stage-tab"} onClick={() => setActiveStage(index)} key={stage.key} data-testid={`stage-tab-${stage.key}`}><span>{String(index + 1).padStart(2, "0")}</span>{stage.name}<>{activeStage > index && <Check size={13} />}</></button>)}</div><div className="stage-detail glass" data-testid="active-stage-detail"><div className="stage-title"><span className="index">STAGE {String(activeStage + 1).padStart(2, "0")} / STRUCTURED OUTPUT</span><h3>{workflow.stages[activeStage].name}</h3><p>{workflow.stages[activeStage].summary}</p></div><div className="decision-grid">{workflow.stages[activeStage].decisions?.map((decision) => <div className="decision" key={decision.label}><span>{decision.label}</span><p>{decision.value}</p></div>)}</div><div className="tension-row"><div><span className="index">TENSIONS TO RESOLVE</span>{workflow.stages[activeStage].tensions?.map((tension) => <p key={tension}>↳ {tension}</p>)}</div><div className="next-question"><span className="index">NEXT QUESTION</span><p>{workflow.stages[activeStage].next_question}</p></div></div></div></>}</div> : !result ? <div className="empty-report" data-testid="empty-report"><Target size={24} /><span>Run a quick read or build the six-stage system to surface the hidden structure of your idea.</span></div> : <div className="report-grid" data-testid="analysis-report"><div className="score-card glass"><span className="index">DISTINCTION INDEX</span><div className="score">{result.score}<small>/100</small></div><div className="score-bar"><span style={{ width: `${result.score}%` }} /></div><p>{result.verdict}</p></div><div className="diagnosis-card glass"><span className="index">THE READ</span><p className="diagnosis">{result.diagnosis}</p><div className="signal-list">{result.signals.map((signal) => <div className="signal-row" key={signal.label}><span>{signal.label}</span><div className="mini-bar"><i style={{ width: `${signal.value}%` }} /></div><b>{signal.value}</b></div>)}</div></div><div className="unlock-card"><span className="index">NEXT UNLOCKS</span>{result.unlocks.map((unlock, i) => <div className="unlock" key={unlock}><span>0{i + 1}</span>{unlock}<ArrowUpRight size={15} /></div>)}</div><div className="concept-card"><span className="index">DISTINCTIVE CONCEPT / GENERATED</span><p>{result.distinct_concept}</p><button data-testid="save-concept-button">SAVE TO PLAYGROUND <ArrowUpRight size={16} /></button></div></div>}
         </motion.section>
       </div>
     </section>
