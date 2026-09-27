@@ -29,6 +29,7 @@ One guided originality journey: submit a raw idea, understand the generic residu
 - Follow-up chat per project (`POST /api/workflows/{id}/chat`): the engine receives all six stage outputs plus prior messages, replies are persisted, and reload restores the thread.
 - Frontend split into components: AuthScreen, Sidebar, IdeaPanel, StageReport (+BuildProgress), QuickRead, ProjectChat, SubmissionKit, HowItWorks; AuthContext + axios client with Bearer token.
 - New "How it works" view listing the five features with a 90-second demo path; Submission Kit persists on-device per user.
+- Shared judge account `judge@antigeneric.app / Inkloom-Judge-2026` seeded on startup, with a one-click 'Enter as judge' card on the sign-in screen so judges see the prepared projects and chats.
 - Testing: iteration_4 — 12/12 backend pytest, all frontend flows pass (auth, persistence, history, chat memory, isolation, nav, mobile).
 
 ## Prioritized backlog

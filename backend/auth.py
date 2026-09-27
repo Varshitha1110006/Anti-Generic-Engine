@@ -123,10 +123,11 @@ async def ensure_auth_indexes(db: AsyncIOMotorDatabase):
 
 
 async def seed_demo_user(db: AsyncIOMotorDatabase):
-    email = os.environ["DEMO_EMAIL"].lower()
-    password = os.environ["DEMO_PASSWORD"]
-    existing = await db.users.find_one({"email": email})
-    if existing is None:
-        await db.users.insert_one({"id": str(uuid.uuid4()), "name": "Demo Founder", "email": email, "password_hash": hash_password(password), "created_at": datetime.now(timezone.utc).isoformat()})
-    elif not verify_password(password, existing["password_hash"]):
-        await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(password)}})
+    accounts = [(os.environ["DEMO_EMAIL"], os.environ["DEMO_PASSWORD"], "Demo Founder"), (os.environ["JUDGE_EMAIL"], os.environ["JUDGE_PASSWORD"], "Inkloom Judge")]
+    for email, password, name in accounts:
+        email = email.lower()
+        existing = await db.users.find_one({"email": email})
+        if existing is None:
+            await db.users.insert_one({"id": str(uuid.uuid4()), "name": name, "email": email, "password_hash": hash_password(password), "created_at": datetime.now(timezone.utc).isoformat()})
+        elif not verify_password(password, existing["password_hash"]):
+            await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(password)}})
