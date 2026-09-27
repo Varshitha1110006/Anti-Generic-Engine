@@ -30,6 +30,9 @@ One guided originality journey: submit a raw idea, understand the generic residu
 - Frontend split into components: AuthScreen, Sidebar, IdeaPanel, StageReport (+BuildProgress), QuickRead, ProjectChat, SubmissionKit, HowItWorks; AuthContext + axios client with Bearer token.
 - New "How it works" view listing the five features with a 90-second demo path; Submission Kit persists on-device per user.
 - Shared judge account `judge@antigeneric.app / Inkloom-Judge-2026` seeded on startup, with a one-click 'Enter as judge' card on the sign-in screen so judges see the prepared projects and chats.
+- Roles + daily AI allowance (protects the owner's Universal Key balance): owner unlimited; judge 3 builds + 15 chats/day; registered users 1 build + 5 chats/day; HTTP 429 when exhausted, UI disables the buttons with a clear note. `GET /api/usage` powers the topbar allowance badge.
+- Judge account is view-only for rename/delete (403) and sees every owner project as a "SHOWCASE" item in its Recent Projects, so judges land directly on the prepared brand systems and conversations. Owner credentials removed from the sign-in screen.
+- Testing: iteration_5 — 13/13 backend, 100% frontend (roles, quotas, showcase, read-only, regression).
 - Testing: iteration_4 — 12/12 backend pytest, all frontend flows pass (auth, persistence, history, chat memory, isolation, nav, mobile).
 
 ## Prioritized backlog

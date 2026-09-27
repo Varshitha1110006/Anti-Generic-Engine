@@ -30,7 +30,7 @@ def demo_token(session):
     assert r.status_code == 200, r.text
     data = r.json()
     assert "token" in data and data["user"]["email"] == "demo@antigeneric.app"
-    assert data["user"]["name"] == "Demo Founder"
+    assert data["user"]["name"] == "Studio Owner"
     return data["token"]
 
 
