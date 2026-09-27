@@ -20,9 +20,8 @@ from groq import Groq
 from auth import build_auth_router, ensure_auth_indexes, seed_demo_user
 
 # MongoDB connection
-import certifi
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url,tlsCAFile=certifi.where())
+client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 app = FastAPI()
@@ -107,7 +106,7 @@ async def stream_llm(system: str, prompt: str) -> str:
     
     # Map your model to Groq's supported models (e.g., llama-3.3-70b-versatile)
     response = client_groq.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": prompt}
