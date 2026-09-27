@@ -21,6 +21,7 @@ One guided originality journey: submit a raw idea, understand the generic residu
 - Added a real six-stage AI workflow using the Emergent universal key and streamed LLM calls: Understand, Personality, Challenge Generic, Visualize, Test Consistency, and Launch.
 - Added audience and constraint inputs, structured stage tabs, decisions, tensions, next questions, workflow persistence, and public workflow retrieval.
 - Partial AI workflows fail safely with HTTP 503 and are never persisted as complete brand systems.
+- Added a hackathon submission kit with project/team identity, repository/live/demo link tracking, demo run-of-show checklist, and Inkloom credit reference.
 
 ## Prioritized backlog
 - P0: Add a submission kit screen with project metadata, contribution details, demo script, and required link checklist.
