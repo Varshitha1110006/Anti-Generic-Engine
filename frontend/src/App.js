@@ -27,9 +27,14 @@ function Workspace() {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
   const [titleDraft, setTitleDraft] = useState("");
+  const [usage, setUsage] = useState(null);
 
   const loadHistory = useCallback(() => api.get("/workflows").then(({ data }) => setHistory(data)).catch(() => {}), []);
-  useEffect(() => { loadHistory(); }, [loadHistory]);
+  const loadUsage = useCallback(() => api.get("/usage").then(({ data }) => setUsage(data)).catch(() => {}), []);
+  useEffect(() => { loadHistory(); loadUsage(); }, [loadHistory, loadUsage]);
+  const canEdit = usage?.can_edit ?? user.role !== "judge";
+  const buildsLeft = usage && !usage.unlimited ? usage.builds_limit - usage.builds_used : null;
+  const chatsLeft = usage && !usage.unlimited ? usage.chats_limit - usage.chats_used : null;
 
   const goStudio = () => { setView("studio"); setMenuOpen(false); };
   const newProject = () => { setProject(null); setResult(null); setDraft(starterDraft); setActiveStage(0); goStudio(); };
@@ -48,8 +53,8 @@ function Workspace() {
 
   const build = async () => {
     setLoading(true); setProject(null); setResult(null);
-    try { const { data } = await api.post("/workflow", draft); setProject(data); setTitleDraft(data.title); setActiveStage(0); loadHistory(); toast.success("Brand system saved to your projects."); }
-    catch (err) { toast.error(apiError(err, "The six-stage engine is temporarily unavailable. Try again shortly.")); }
+    try { const { data } = await api.post("/workflow", draft); setProject(data); setTitleDraft(data.title); setActiveStage(0); loadHistory(); loadUsage(); toast.success("Brand system saved to your projects."); }
+    catch (err) { toast.error(apiError(err, "The six-stage engine is temporarily unavailable. Try again shortly.")); loadUsage(); }
     finally { setLoading(false); }
   };
 
@@ -65,16 +70,16 @@ function Workspace() {
     catch (err) { toast.error(apiError(err)); }
   };
 
-  const onChatUpdate = (data) => { setProject(data); loadHistory(); };
+  const onChatUpdate = (data) => { setProject(data); loadHistory(); loadUsage(); };
 
   return <main className="shell">
     <div className="grain" />
-    <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} view={view} onView={(v) => { setView(v); setMenuOpen(false); }} history={history} activeId={project?.id} onOpenProject={openProject} onNewProject={newProject} onDeleteProject={deleteProject} />
+    <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} view={view} onView={(v) => { setView(v); setMenuOpen(false); }} history={history} activeId={project?.id} onOpenProject={openProject} onNewProject={newProject} onDeleteProject={deleteProject} canEdit={canEdit} />
     <section className="content">
       <header className="topbar">
         <button className="menu-button" onClick={() => setMenuOpen(true)} data-testid="open-menu-button"><Menu size={20} /></button>
-        <div className="crumb">PROJECT / {project ? <input className="title-input" value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)} onBlur={rename} onKeyDown={(e) => e.key === "Enter" && e.target.blur()} maxLength={80} aria-label="Project title" data-testid="project-title-input" /> : <strong data-testid="project-title-draft">NEW DRAFT</strong>}</div>
-        <div className="top-actions"><span className="save-status" data-testid="save-status">{project ? "SAVED TO YOUR ACCOUNT" : loading ? "BUILDING..." : "UNSAVED DRAFT"}</span></div>
+        <div className="crumb">PROJECT / {project && !canEdit ? <strong data-testid="project-title-readonly">{project.title}</strong> : project ? <input className="title-input" value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)} onBlur={rename} onKeyDown={(e) => e.key === "Enter" && e.target.blur()} maxLength={80} aria-label="Project title" data-testid="project-title-input" /> : <strong data-testid="project-title-draft">NEW DRAFT</strong>}</div>
+        <div className="top-actions">{usage && !usage.unlimited && <span className="allowance" data-testid="allowance-status">TODAY · {buildsLeft} BUILD{buildsLeft === 1 ? "" : "S"} · {chatsLeft} CHAT{chatsLeft === 1 ? "" : "S"} LEFT</span>}{usage?.unlimited && <span className="allowance owner" data-testid="allowance-status">OWNER · UNLIMITED</span>}<span className="save-status" data-testid="save-status">{project ? "SAVED TO YOUR ACCOUNT" : loading ? "BUILDING..." : "UNSAVED DRAFT"}</span></div>
       </header>
       <div className="page-wrap">
         {view === "guide" && <HowItWorks onStart={goStudio} />}
@@ -85,12 +90,12 @@ function Workspace() {
             <h1>Make the <i>familiar</i><br /><span>impossible to ignore.</span></h1>
             <p className="lede">A thinking instrument for finding the signal inside an idea —<br className="desktop" /> before the category smooths it out.</p>
           </motion.div>
-          <IdeaPanel draft={draft} onChange={setDraft} loading={loading} onQuickRead={quickRead} onBuild={build} result={result} locked={Boolean(project)} />
+          <IdeaPanel draft={draft} onChange={setDraft} loading={loading} onQuickRead={quickRead} onBuild={build} result={result} locked={Boolean(project)} buildsLeft={buildsLeft} />
           <motion.section className="results-area" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .4 }}>
             <div className="section-heading"><div><span className="eyebrow">02 / {project ? "SIX-STAGE BRAND SYSTEM" : "THE DIAGNOSTIC REPORT"}</span><h2>{project || result ? "Here is what the engine sees." : "Nothing generic survives a closer look."}</h2></div>{result && !project && <button className="reset-button" onClick={() => setResult(null)} data-testid="reset-analysis-button"><RotateCcw size={15} /> RESET</button>}</div>
             {loading && !result ? <BuildProgress /> : project ? <div className="workflow-report" data-testid="workflow-report"><StageReport stages={project.stages} activeStage={activeStage} onSelect={setActiveStage} /></div> : result ? <QuickRead result={result} onBuild={build} /> : <div className="empty-report" data-testid="empty-report"><Target size={24} /><span>Run a quick read or build the six-stage system to surface the hidden structure of your idea.</span></div>}
           </motion.section>
-          {project && <ProjectChat project={project} onUpdate={onChatUpdate} />}
+          {project && <ProjectChat project={project} onUpdate={onChatUpdate} chatsLeft={chatsLeft} />}
         </>}
       </div>
     </section>

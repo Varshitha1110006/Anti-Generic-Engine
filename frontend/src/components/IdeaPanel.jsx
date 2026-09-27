@@ -1,7 +1,8 @@
 import { motion } from "framer-motion";
 import { ArrowUpRight, Eye } from "lucide-react";
 
-export function IdeaPanel({ draft, onChange, loading, onQuickRead, onBuild, result, locked }) {
+export function IdeaPanel({ draft, onChange, loading, onQuickRead, onBuild, result, locked, buildsLeft }) {
+  const exhausted = buildsLeft !== null && buildsLeft <= 0;
   const set = (key) => (e) => onChange({ ...draft, [key]: e.target.value });
   return <div className="workspace-grid">
     <motion.section className="input-panel glass" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .12 }}>
@@ -10,11 +11,11 @@ export function IdeaPanel({ draft, onChange, loading, onQuickRead, onBuild, resu
       <textarea id="idea-input" data-testid="idea-input" value={draft.idea} onChange={set("idea")} maxLength={1200} readOnly={locked} placeholder="Write the idea as it exists in your head..." />
       <label htmlFor="audience-input">WHO IS IT FOR / THE HUMAN ON THE OTHER SIDE</label><input id="audience-input" data-testid="audience-input" value={draft.audience} onChange={set("audience")} readOnly={locked} />
       <label htmlFor="constraints-input">NON-NEGOTIABLE / THE SHARP EDGE</label><input id="constraints-input" data-testid="constraints-input" value={draft.constraints} onChange={set("constraints")} readOnly={locked} />
-      <div className="input-footer"><span>{draft.idea.length} / 1200</span>
+      <div className="input-footer"><span>{draft.idea.length} / 1200{buildsLeft !== null && !locked && <> · {buildsLeft} BUILD{buildsLeft === 1 ? "" : "S"} LEFT TODAY</>}</span>
         <div className="action-pair">
           {locked ? <span className="locked-note" data-testid="project-locked-note">SAVED PROJECT · START A NEW ONE TO EDIT</span> : <>
             <button className="secondary-button" onClick={onQuickRead} disabled={loading} data-testid="analyze-idea-button">QUICK READ</button>
-            <button className="analyze-button" onClick={onBuild} disabled={loading || draft.idea.trim().length < 3} data-testid="build-brand-system-button">{loading ? "BUILDING..." : "BUILD BRAND SYSTEM"}<ArrowUpRight size={17} /></button></>}
+            <button className="analyze-button" onClick={onBuild} disabled={loading || exhausted || draft.idea.trim().length < 3} title={exhausted ? "Daily build allowance reached on this account" : undefined} data-testid="build-brand-system-button">{loading ? "BUILDING..." : exhausted ? "DAILY BUILDS USED" : "BUILD BRAND SYSTEM"}<ArrowUpRight size={17} /></button></>}
         </div>
       </div>
     </motion.section>

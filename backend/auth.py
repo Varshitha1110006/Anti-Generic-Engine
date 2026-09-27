@@ -41,6 +41,7 @@ class UserOut(BaseModel):
     id: str
     name: str
     email: str
+    role: str
     created_at: str
 
 
@@ -50,7 +51,7 @@ class AuthResponse(BaseModel):
 
 
 def public_user(doc: dict) -> dict:
-    return {"id": doc["id"], "name": doc["name"], "email": doc["email"], "created_at": doc["created_at"]}
+    return {"id": doc["id"], "name": doc["name"], "email": doc["email"], "role": doc.get("role", "user"), "created_at": doc["created_at"]}
 
 
 def build_auth_router(db: AsyncIOMotorDatabase) -> tuple[APIRouter, callable]:
@@ -89,7 +90,7 @@ def build_auth_router(db: AsyncIOMotorDatabase) -> tuple[APIRouter, callable]:
         email = payload.email.lower().strip()
         if await db.users.find_one({"email": email}):
             raise HTTPException(status_code=409, detail="An account with this email already exists. Sign in instead.")
-        user = {"id": str(uuid.uuid4()), "name": payload.name.strip(), "email": email, "password_hash": hash_password(payload.password), "created_at": datetime.now(timezone.utc).isoformat()}
+        user = {"id": str(uuid.uuid4()), "name": payload.name.strip(), "email": email, "password_hash": hash_password(payload.password), "role": "user", "created_at": datetime.now(timezone.utc).isoformat()}
         await db.users.insert_one({**user})
         return {"token": create_access_token(user["id"], email), "user": public_user(user)}
 
@@ -123,11 +124,14 @@ async def ensure_auth_indexes(db: AsyncIOMotorDatabase):
 
 
 async def seed_demo_user(db: AsyncIOMotorDatabase):
-    accounts = [(os.environ["DEMO_EMAIL"], os.environ["DEMO_PASSWORD"], "Demo Founder"), (os.environ["JUDGE_EMAIL"], os.environ["JUDGE_PASSWORD"], "Inkloom Judge")]
-    for email, password, name in accounts:
+    accounts = [(os.environ["DEMO_EMAIL"], os.environ["DEMO_PASSWORD"], "Studio Owner", "owner"), (os.environ["JUDGE_EMAIL"], os.environ["JUDGE_PASSWORD"], "Inkloom Judge", "judge")]
+    for email, password, name, role in accounts:
         email = email.lower()
         existing = await db.users.find_one({"email": email})
         if existing is None:
-            await db.users.insert_one({"id": str(uuid.uuid4()), "name": name, "email": email, "password_hash": hash_password(password), "created_at": datetime.now(timezone.utc).isoformat()})
-        elif not verify_password(password, existing["password_hash"]):
-            await db.users.update_one({"email": email}, {"$set": {"password_hash": hash_password(password)}})
+            await db.users.insert_one({"id": str(uuid.uuid4()), "name": name, "email": email, "password_hash": hash_password(password), "role": role, "created_at": datetime.now(timezone.utc).isoformat()})
+        else:
+            updates = {"role": role, "name": name}
+            if not verify_password(password, existing["password_hash"]):
+                updates["password_hash"] = hash_password(password)
+            await db.users.update_one({"email": email}, {"$set": updates})

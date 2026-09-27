@@ -55,11 +55,10 @@ export function AuthScreen() {
       </form>
       <div className="judge-access" data-testid="judge-access-card">
         <span className="index">FOR HACKATHON JUDGES / SHARED ACCESS</span>
-        <p>No personal account needed. Use the shared judge login to open the saved projects and conversations prepared for review.</p>
+        <p>No personal account needed. Use the shared judge login to open the saved projects and conversations prepared for review, and try the engine live with a daily allowance.</p>
         <div className="judge-creds"><code data-testid="judge-email">judge@antigeneric.app</code><code data-testid="judge-password">Inkloom-Judge-2026</code></div>
         <button type="button" className="secondary-button judge-button" disabled={busy} onClick={() => quickLogin("judge@antigeneric.app", "Inkloom-Judge-2026")} data-testid="judge-login-button"><Lock size={12} /> ENTER AS JUDGE</button>
       </div>
-      <div className="auth-demo" data-testid="auth-demo-hint">Demo founder account: <button type="button" onClick={() => quickLogin("demo@antigeneric.app", "Demo1234!")} disabled={busy} data-testid="auth-fill-demo">demo@antigeneric.app / Demo1234!</button></div>
     </motion.section>
   </main>;
 }

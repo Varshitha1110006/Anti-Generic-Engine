@@ -80,6 +80,7 @@ class WorkflowSummary(BaseModel):
     created_at: str
     updated_at: str
     message_count: int
+    shared: bool = False
 
 class RenameRequest(BaseModel):
     title: str = Field(min_length=1, max_length=80)
@@ -127,16 +128,69 @@ def make_title(idea: str) -> str:
     return (title[:56] + "…") if len(title) > 56 else title
 
 
+async def visible_user_ids(user: dict) -> List[str]:
+    """Judges also see every project prepared by owner accounts (the hackathon showcase)."""
+    ids = [user["id"]]
+    if user["role"] == "judge":
+        owners = await db.users.find({"role": "owner"}, {"_id": 0, "id": 1}).to_list(10)
+        ids += [o["id"] for o in owners]
+    return ids
+
+
 async def owned_workflow(workflow_id: str, user: dict) -> dict:
-    doc = await db.workflows.find_one({"id": workflow_id, "user_id": user["id"]}, {"_id": 0})
+    doc = await db.workflows.find_one({"id": workflow_id, "user_id": {"$in": await visible_user_ids(user)}}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Project not found")
     return doc
 
 
+# ---------- Daily AI allowance (protects the owner's Universal Key balance) ----------
+QUOTAS = {"owner": None, "judge": {"build": 3, "chat": 15}, "user": {"build": 1, "chat": 5}}
+
+
+def today_key() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+async def usage_snapshot(user: dict) -> dict:
+    limits = QUOTAS.get(user["role"], QUOTAS["user"])
+    record = await db.usage.find_one({"user_id": user["id"], "day": today_key()}, {"_id": 0}) or {}
+    return {"role": user["role"], "unlimited": limits is None,
+            "builds_used": record.get("build", 0), "builds_limit": None if limits is None else limits["build"],
+            "chats_used": record.get("chat", 0), "chats_limit": None if limits is None else limits["chat"],
+            "can_edit": user["role"] != "judge"}
+
+
+async def assert_allowance(user: dict, kind: str):
+    limits = QUOTAS.get(user["role"], QUOTAS["user"])
+    if limits is None:
+        return
+    record = await db.usage.find_one({"user_id": user["id"], "day": today_key()}) or {}
+    if record.get(kind, 0) >= limits[kind]:
+        label = "brand system builds" if kind == "build" else "chat messages"
+        raise HTTPException(status_code=429, detail=f"Daily allowance reached: {limits[kind]} {label} per day on this account. Saved projects stay fully viewable; the allowance resets at midnight UTC.")
+
+
+async def record_usage(user: dict, kind: str):
+    if QUOTAS.get(user["role"], QUOTAS["user"]) is None:
+        return
+    await db.usage.update_one({"user_id": user["id"], "day": today_key()}, {"$inc": {kind: 1}}, upsert=True)
+
+
+def assert_can_edit(user: dict):
+    if user["role"] == "judge":
+        raise HTTPException(status_code=403, detail="The judge account is view-only for renaming and deleting projects.")
+
+
+@api_router.get("/usage")
+async def get_usage(user: dict = Depends(get_current_user)):
+    return await usage_snapshot(user)
+
+
 # ---------- Projects ----------
 @api_router.post("/workflow", response_model=WorkflowResponse)
 async def run_workflow(input: WorkflowRequest, user: dict = Depends(get_current_user)):
+    await assert_allowance(user, "build")
     context: Dict[str, Any] = {"idea": input.idea.strip(), "audience": input.audience.strip(), "constraints": input.constraints.strip(), "stages": []}
     stages: List[Dict[str, Any]] = []
     try:
@@ -150,13 +204,14 @@ async def run_workflow(input: WorkflowRequest, user: dict = Depends(get_current_
     now = datetime.now(timezone.utc).isoformat()
     doc = {"id": str(uuid.uuid4()), "user_id": user["id"], "title": make_title(input.idea), "idea": input.idea.strip(), "audience": input.audience.strip(), "constraints": input.constraints.strip(), "stages": stages, "messages": [], "created_at": now, "updated_at": now}
     await db.workflows.insert_one({**doc})
+    await record_usage(user, "build")
     return doc
 
 
 @api_router.get("/workflows", response_model=List[WorkflowSummary])
 async def list_workflows(user: dict = Depends(get_current_user)):
-    docs = await db.workflows.find({"user_id": user["id"]}, {"_id": 0, "id": 1, "title": 1, "idea": 1, "created_at": 1, "updated_at": 1, "messages": 1}).sort("updated_at", -1).to_list(100)
-    return [{"id": d["id"], "title": d.get("title") or make_title(d["idea"]), "idea": d["idea"], "created_at": d["created_at"], "updated_at": d.get("updated_at", d["created_at"]), "message_count": len(d.get("messages", []))} for d in docs]
+    docs = await db.workflows.find({"user_id": {"$in": await visible_user_ids(user)}}, {"_id": 0, "id": 1, "user_id": 1, "title": 1, "idea": 1, "created_at": 1, "updated_at": 1, "messages": 1}).sort("updated_at", -1).to_list(100)
+    return [{"id": d["id"], "title": d.get("title") or make_title(d["idea"]), "idea": d["idea"], "created_at": d["created_at"], "updated_at": d.get("updated_at", d["created_at"]), "message_count": len(d.get("messages", [])), "shared": d["user_id"] != user["id"]} for d in docs]
 
 
 @api_router.get("/workflows/{workflow_id}", response_model=WorkflowResponse)
@@ -170,13 +225,15 @@ async def get_workflow(workflow_id: str, user: dict = Depends(get_current_user))
 
 @api_router.patch("/workflows/{workflow_id}", response_model=WorkflowSummary)
 async def rename_workflow(workflow_id: str, input: RenameRequest, user: dict = Depends(get_current_user)):
+    assert_can_edit(user)
     doc = await owned_workflow(workflow_id, user)
-    await db.workflows.update_one({"id": workflow_id}, {"$set": {"title": input.title.strip()}})
+    await db.workflows.update_one({"id": workflow_id, "user_id": user["id"]}, {"$set": {"title": input.title.strip()}})
     return {"id": doc["id"], "title": input.title.strip(), "idea": doc["idea"], "created_at": doc["created_at"], "updated_at": doc.get("updated_at", doc["created_at"]), "message_count": len(doc.get("messages", []))}
 
 
 @api_router.delete("/workflows/{workflow_id}")
 async def delete_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
+    assert_can_edit(user)
     result = await db.workflows.delete_one({"id": workflow_id, "user_id": user["id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -186,6 +243,7 @@ async def delete_workflow(workflow_id: str, user: dict = Depends(get_current_use
 @api_router.post("/workflows/{workflow_id}/chat", response_model=WorkflowResponse)
 async def chat_with_project(workflow_id: str, input: ChatRequest, user: dict = Depends(get_current_user)):
     doc = await owned_workflow(workflow_id, user)
+    await assert_allowance(user, "chat")
     history = doc.get("messages", [])
     transcript = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in history[-12:])
     system = ENGINE_SYSTEM + " You are continuing a conversation about ONE brand project. You remember every stage output and every earlier message. Answer in plain prose (no JSON, no markdown headers), under 160 words, and end with one sharp follow-up question when useful."
@@ -198,6 +256,7 @@ async def chat_with_project(workflow_id: str, input: ChatRequest, user: dict = D
     now = datetime.now(timezone.utc).isoformat()
     new_messages = [{"role": "user", "content": input.message.strip(), "created_at": now}, {"role": "assistant", "content": reply, "created_at": now}]
     await db.workflows.update_one({"id": workflow_id}, {"$push": {"messages": {"$each": new_messages}}, "$set": {"updated_at": now}})
+    await record_usage(user, "chat")
     doc["messages"] = history + new_messages
     doc["updated_at"] = now
     doc.setdefault("title", make_title(doc["idea"]))
@@ -250,6 +309,7 @@ async def on_startup():
     await ensure_auth_indexes(db)
     await seed_demo_user(db)
     await db.workflows.create_index([("user_id", 1), ("updated_at", -1)])
+    await db.usage.create_index([("user_id", 1), ("day", 1)], unique=True)
 
 
 @app.on_event("shutdown")

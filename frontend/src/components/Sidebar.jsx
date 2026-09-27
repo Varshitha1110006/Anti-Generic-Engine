@@ -11,7 +11,7 @@ const relative = (iso) => {
   return `${Math.floor(diff / 86400)}d ago`;
 };
 
-export function Sidebar({ open, onClose, view, onView, history, activeId, onOpenProject, onNewProject, onDeleteProject }) {
+export function Sidebar({ open, onClose, view, onView, history, activeId, onOpenProject, onNewProject, onDeleteProject, canEdit }) {
   const { user, logout } = useAuth();
   const initials = user.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
@@ -28,14 +28,14 @@ export function Sidebar({ open, onClose, view, onView, history, activeId, onOpen
       {history.map((item) => <div key={item.id} className={activeId === item.id ? "history-item active" : "history-item"} data-testid={`history-item-${item.id}`}>
         <button className="history-open" onClick={() => onOpenProject(item.id)} data-testid={`history-open-${item.id}`}>
           <strong>{item.title}</strong>
-          <span>{relative(item.updated_at)}{item.message_count > 0 && <> · <MessageSquare size={9} /> {item.message_count / 2}</>}</span>
+          <span>{item.shared && <em className="shared-tag" data-testid="shared-tag">SHOWCASE</em>}{relative(item.updated_at)}{item.message_count > 0 && <> · <MessageSquare size={9} /> {item.message_count / 2}</>}</span>
         </button>
-        <button className="history-delete" onClick={() => onDeleteProject(item.id)} aria-label="Delete project" data-testid={`history-delete-${item.id}`}><Trash2 size={13} /></button>
+        {canEdit && !item.shared && <button className="history-delete" onClick={() => onDeleteProject(item.id)} aria-label="Delete project" data-testid={`history-delete-${item.id}`}><Trash2 size={13} /></button>}
       </div>)}
     </div>
     <div className="sidebar-user" data-testid="sidebar-user">
       <div className="avatar">{initials}</div>
-      <div className="sidebar-user-copy"><strong data-testid="sidebar-user-name">{user.name}</strong><span>{user.email}</span></div>
+      <div className="sidebar-user-copy"><strong data-testid="sidebar-user-name">{user.name}</strong><span data-testid="sidebar-user-role">{user.role === "owner" ? "OWNER · UNLIMITED" : user.role === "judge" ? "JUDGE · VIEW + TRY" : user.email}</span></div>
       <button className="icon-button" onClick={logout} aria-label="Sign out" data-testid="logout-button"><LogOut size={15} /></button>
     </div>
   </aside>;
