@@ -1,46 +1,41 @@
-from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
+
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
-from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional
 from typing import Any, Dict
 import uuid
 import json
 import re
 from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta
-
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+from auth import build_auth_router, ensure_auth_indexes, seed_demo_user
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
 app = FastAPI()
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+auth_router, get_current_user = build_auth_router(db)
+api_router.include_router(auth_router)
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+LLM_MODEL = ("openai", "gpt-5.4")
 
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class StatusCheckCreate(BaseModel):
-    client_name: str
-
+# ---------- Models ----------
 class AnalyzeRequest(BaseModel):
     idea: str
 
@@ -58,17 +53,40 @@ class AnalyzeResponse(BaseModel):
     distinct_concept: str
 
 class WorkflowRequest(BaseModel):
-    idea: str
+    idea: str = Field(min_length=3, max_length=1200)
     audience: str = ""
     constraints: str = ""
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+    created_at: str
+
 class WorkflowResponse(BaseModel):
     id: str
+    title: str
     idea: str
     audience: str
     constraints: str
     stages: List[Dict[str, Any]]
+    messages: List[ChatMessage] = []
     created_at: str
+    updated_at: str
+
+class WorkflowSummary(BaseModel):
+    id: str
+    title: str
+    idea: str
+    created_at: str
+    updated_at: str
+    message_count: int
+
+class RenameRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+
 
 STAGES = [
     ("understand", "UNDERSTAND", "Extract the core problem, true target user, context, constraints, value and open questions."),
@@ -79,15 +97,22 @@ STAGES = [
     ("launch", "LAUNCH", "Create a landing headline, one-line pitch, social launch post and a concise launch checklist without breaking the personality."),
 ]
 
-async def run_ai_stage(stage_key: str, stage_name: str, brief: str, context: Dict[str, Any]) -> Dict[str, Any]:
-    system = """You are the Anti Generic Engine, a rigorous brand strategist. You help a founder make better decisions, not receive vague inspiration. Never use filler phrases. Be specific, challenge assumptions, and preserve context from earlier stages. Return ONLY valid JSON with exactly these keys: summary (string), decisions (array of objects with label and value strings), tensions (array of strings), next_question (string)."""
-    prompt = f"""STAGE: {stage_name}\nJOB: {brief}\nORIGINAL IDEA: {context.get('idea', '')}\nAUDIENCE: {context.get('audience', '') or 'unknown — infer carefully and mark assumptions'}\nCONSTRAINTS: {context.get('constraints', '') or 'none stated'}\nEARLIER STRUCTURED OUTPUTS: {json.dumps(context.get('stages', []), ensure_ascii=False)}\n\nMake this stage useful enough to guide the next decision. Keep summary under 90 words, decisions to 3-5 items, tensions to 2-4 items. Return JSON only."""
-    chat = LlmChat(api_key=os.environ["EMERGENT_LLM_KEY"], session_id=f"anti-generic-{uuid.uuid4()}", system_message=system).with_model("openai", "gpt-5.4")
+ENGINE_SYSTEM = "You are the Anti Generic Engine, a rigorous brand strategist. You help a founder make better decisions, not receive vague inspiration. Never use filler phrases. Be specific, challenge assumptions, and preserve context from earlier stages."
+
+
+async def stream_llm(system: str, prompt: str) -> str:
+    chat = LlmChat(api_key=os.environ["EMERGENT_LLM_KEY"], session_id=f"anti-generic-{uuid.uuid4()}", system_message=system).with_model(*LLM_MODEL)
     chunks = []
     async for event in chat.stream_message(UserMessage(text=prompt)):
         if isinstance(event, TextDelta):
             chunks.append(event.content)
-    raw = "".join(chunks).strip()
+    return "".join(chunks).strip()
+
+
+async def run_ai_stage(stage_key: str, stage_name: str, brief: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    system = ENGINE_SYSTEM + " Return ONLY valid JSON with exactly these keys: summary (string), decisions (array of objects with label and value strings), tensions (array of strings), next_question (string)."
+    prompt = f"""STAGE: {stage_name}\nJOB: {brief}\nORIGINAL IDEA: {context.get('idea', '')}\nAUDIENCE: {context.get('audience', '') or 'unknown — infer carefully and mark assumptions'}\nCONSTRAINTS: {context.get('constraints', '') or 'none stated'}\nEARLIER STRUCTURED OUTPUTS: {json.dumps(context.get('stages', []), ensure_ascii=False)}\n\nMake this stage useful enough to guide the next decision. Keep summary under 90 words, decisions to 3-5 items, tensions to 2-4 items. Return JSON only."""
+    raw = await stream_llm(system, prompt)
     raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw).strip()
     try:
         parsed = json.loads(raw)
@@ -95,11 +120,25 @@ async def run_ai_stage(stage_key: str, stage_name: str, brief: str, context: Dic
         parsed = {"summary": raw[:800], "decisions": [], "tensions": ["The model returned an unstructured signal; revisit this stage."], "next_question": "What would make this decision more specific?"}
     return {"key": stage_key, "name": stage_name, **parsed}
 
+
+def make_title(idea: str) -> str:
+    words = re.sub(r"\s+", " ", idea.strip()).split(" ")
+    title = " ".join(words[:7])
+    return (title[:56] + "…") if len(title) > 56 else title
+
+
+async def owned_workflow(workflow_id: str, user: dict) -> dict:
+    doc = await db.workflows.find_one({"id": workflow_id, "user_id": user["id"]}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return doc
+
+
+# ---------- Projects ----------
 @api_router.post("/workflow", response_model=WorkflowResponse)
-async def run_workflow(input: WorkflowRequest):
-    workflow_id = str(uuid.uuid4())
+async def run_workflow(input: WorkflowRequest, user: dict = Depends(get_current_user)):
     context: Dict[str, Any] = {"idea": input.idea.strip(), "audience": input.audience.strip(), "constraints": input.constraints.strip(), "stages": []}
-    stages = []
+    stages: List[Dict[str, Any]] = []
     try:
         for stage_key, stage_name, brief in STAGES:
             stage = await run_ai_stage(stage_key, stage_name, brief, context)
@@ -108,29 +147,74 @@ async def run_workflow(input: WorkflowRequest):
     except Exception as exc:
         logging.exception("AI workflow failed at stage %s", len(stages) + 1)
         raise HTTPException(status_code=503, detail="The reasoning engine could not complete every stage. No partial brand system was saved.") from exc
-    created_at = datetime.now(timezone.utc).isoformat()
-    doc = {"id": workflow_id, "idea": input.idea, "audience": input.audience, "constraints": input.constraints, "stages": stages, "created_at": created_at}
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {"id": str(uuid.uuid4()), "user_id": user["id"], "title": make_title(input.idea), "idea": input.idea.strip(), "audience": input.audience.strip(), "constraints": input.constraints.strip(), "stages": stages, "messages": [], "created_at": now, "updated_at": now}
     await db.workflows.insert_one({**doc})
     return doc
 
-@api_router.get("/workflows", response_model=List[WorkflowResponse])
-async def get_workflows():
-    docs = await db.workflows.find({}, {"_id": 0}).sort("created_at", -1).to_list(20)
-    return docs
 
-# Add your routes to the router instead of directly to app
+@api_router.get("/workflows", response_model=List[WorkflowSummary])
+async def list_workflows(user: dict = Depends(get_current_user)):
+    docs = await db.workflows.find({"user_id": user["id"]}, {"_id": 0, "id": 1, "title": 1, "idea": 1, "created_at": 1, "updated_at": 1, "messages": 1}).sort("updated_at", -1).to_list(100)
+    return [{"id": d["id"], "title": d.get("title") or make_title(d["idea"]), "idea": d["idea"], "created_at": d["created_at"], "updated_at": d.get("updated_at", d["created_at"]), "message_count": len(d.get("messages", []))} for d in docs]
+
+
+@api_router.get("/workflows/{workflow_id}", response_model=WorkflowResponse)
+async def get_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
+    doc = await owned_workflow(workflow_id, user)
+    doc.setdefault("title", make_title(doc["idea"]))
+    doc.setdefault("messages", [])
+    doc.setdefault("updated_at", doc["created_at"])
+    return doc
+
+
+@api_router.patch("/workflows/{workflow_id}", response_model=WorkflowSummary)
+async def rename_workflow(workflow_id: str, input: RenameRequest, user: dict = Depends(get_current_user)):
+    doc = await owned_workflow(workflow_id, user)
+    await db.workflows.update_one({"id": workflow_id}, {"$set": {"title": input.title.strip()}})
+    return {"id": doc["id"], "title": input.title.strip(), "idea": doc["idea"], "created_at": doc["created_at"], "updated_at": doc.get("updated_at", doc["created_at"]), "message_count": len(doc.get("messages", []))}
+
+
+@api_router.delete("/workflows/{workflow_id}")
+async def delete_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
+    result = await db.workflows.delete_one({"id": workflow_id, "user_id": user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"ok": True}
+
+
+@api_router.post("/workflows/{workflow_id}/chat", response_model=WorkflowResponse)
+async def chat_with_project(workflow_id: str, input: ChatRequest, user: dict = Depends(get_current_user)):
+    doc = await owned_workflow(workflow_id, user)
+    history = doc.get("messages", [])
+    transcript = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in history[-12:])
+    system = ENGINE_SYSTEM + " You are continuing a conversation about ONE brand project. You remember every stage output and every earlier message. Answer in plain prose (no JSON, no markdown headers), under 160 words, and end with one sharp follow-up question when useful."
+    prompt = f"""PROJECT TITLE: {doc.get('title', '')}\nIDEA: {doc['idea']}\nAUDIENCE: {doc['audience'] or 'unknown'}\nCONSTRAINTS: {doc['constraints'] or 'none'}\nSIX STAGE OUTPUTS: {json.dumps(doc['stages'], ensure_ascii=False)}\n\nCONVERSATION SO FAR:\n{transcript or '(none yet)'}\n\nUSER: {input.message.strip()}\nASSISTANT:"""
+    try:
+        reply = await stream_llm(system, prompt)
+    except Exception as exc:
+        logging.exception("Project chat failed")
+        raise HTTPException(status_code=503, detail="The engine could not answer right now. Try again shortly.") from exc
+    now = datetime.now(timezone.utc).isoformat()
+    new_messages = [{"role": "user", "content": input.message.strip(), "created_at": now}, {"role": "assistant", "content": reply, "created_at": now}]
+    await db.workflows.update_one({"id": workflow_id}, {"$push": {"messages": {"$each": new_messages}}, "$set": {"updated_at": now}})
+    doc["messages"] = history + new_messages
+    doc["updated_at"] = now
+    doc.setdefault("title", make_title(doc["idea"]))
+    return doc
+
+
+# ---------- Quick read (deterministic, no persistence) ----------
 @api_router.get("/")
 async def root():
     return {"message": "Anti Generic Engine online"}
+
 
 @api_router.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_idea(input: AnalyzeRequest):
     idea = input.idea.strip()
     if not idea:
-        return AnalyzeResponse(
-            score=0, verdict="Awaiting a signal", diagnosis="Give the engine a raw idea to inspect.",
-            signals=[], unlocks=[], distinct_concept=""
-        )
+        return AnalyzeResponse(score=0, verdict="Awaiting a signal", diagnosis="Give the engine a raw idea to inspect.", signals=[], unlocks=[], distinct_concept="")
     words = idea.lower().split()
     generic_terms = {"platform", "innovative", "seamless", "empower", "revolutionary", "community", "ai", "future"}
     overlap = len(set(words) & generic_terms)
@@ -142,39 +226,14 @@ async def analyze_idea(input: AnalyzeRequest):
         Signal(label="Tension", value=min(91, 31 + len(words) * 3), note="The most interesting contradiction has not been named yet."),
     ]
     return AnalyzeResponse(
-        score=score,
-        verdict=verdict,
+        score=score, verdict=verdict,
         diagnosis=f"The idea currently leans on {overlap or 'a few'} familiar category cues. Strip those away and the raw instinct becomes more interesting.",
-        signals=signals,
         unlocks=["Name the enemy, not the audience", "Trade features for a ritual", "Make the constraint visible"],
-        distinct_concept=f"A sharper version of “{idea[:72]}” built around a visible constraint, a memorable ritual, and one opinion nobody else in the category would claim."
+        signals=signals,
+        distinct_concept=f"A sharper version of “{idea[:72]}” built around a visible constraint, a memorable ritual, and one opinion nobody else in the category would claim.",
     )
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
-
-# Include the router in the main app
 app.include_router(api_router)
 
 app.add_middleware(
@@ -185,12 +244,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+
+@app.on_event("startup")
+async def on_startup():
+    await ensure_auth_indexes(db)
+    await seed_demo_user(db)
+    await db.workflows.create_index([("user_id", 1), ("updated_at", -1)])
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

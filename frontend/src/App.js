@@ -1,87 +1,108 @@
-import { useState } from "react";
-import axios from "axios";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowUpRight, BrainCircuit, Check, Compass, Eye, Gauge, Menu, RotateCcw, Sparkles, Target, X } from "lucide-react";
+import { Menu, RotateCcw, Target } from "lucide-react";
+import { Toaster, toast } from "sonner";
 import "@/App.css";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { api, apiError } from "@/lib/api";
+import { AuthScreen } from "@/components/AuthScreen";
+import { Sidebar } from "@/components/Sidebar";
+import { IdeaPanel } from "@/components/IdeaPanel";
+import { BuildProgress, StageReport } from "@/components/StageReport";
+import { QuickRead } from "@/components/QuickRead";
+import { ProjectChat } from "@/components/ProjectChat";
+import { SubmissionKit } from "@/components/SubmissionKit";
+import { HowItWorks } from "@/components/HowItWorks";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const starter = "A space for independent makers to find the right tools without getting lost in the noise.";
+const starterDraft = { idea: "A space for independent makers to find the right tools without getting lost in the noise.", audience: "Independent makers who are tired of same-shaped tools.", constraints: "Must feel opinionated, human, and useful in one sentence." };
 
-function App() {
-  const [idea, setIdea] = useState(starter);
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
+function Workspace() {
+  const { user } = useAuth();
+  const [view, setView] = useState("studio");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [audience, setAudience] = useState("Independent makers who are tired of same-shaped tools.");
-  const [constraints, setConstraints] = useState("Must feel opinionated, human, and useful in one sentence.");
-  const [workflow, setWorkflow] = useState(null);
+  const [draft, setDraft] = useState(starterDraft);
+  const [result, setResult] = useState(null);
+  const [project, setProject] = useState(null);
   const [activeStage, setActiveStage] = useState(0);
-  const [projectName, setProjectName] = useState("Anti Generic Engine");
-  const [teamName, setTeamName] = useState("Untitled Signal");
-  const [links, setLinks] = useState({ repo: "", live: "", demo: "" });
+  const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [titleDraft, setTitleDraft] = useState("");
 
-  const analyze = async () => {
-    if (!idea.trim()) return;
+  const loadHistory = useCallback(() => api.get("/workflows").then(({ data }) => setHistory(data)).catch(() => {}), []);
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  const goStudio = () => { setView("studio"); setMenuOpen(false); };
+  const newProject = () => { setProject(null); setResult(null); setDraft(starterDraft); setActiveStage(0); goStudio(); };
+
+  const openProject = async (id) => {
+    try { const { data } = await api.get(`/workflows/${id}`); setProject(data); setTitleDraft(data.title); setDraft({ idea: data.idea, audience: data.audience, constraints: data.constraints }); setResult(null); setActiveStage(0); goStudio(); }
+    catch (err) { toast.error(apiError(err)); }
+  };
+
+  const quickRead = async () => {
     setLoading(true);
-    try { const { data } = await axios.post(`${API}/analyze`, { idea }); setResult(data); }
-    catch (error) { setResult({ score: 0, verdict: "Engine paused", diagnosis: "The signal could not be reached. Try again in a moment.", signals: [], unlocks: [], distinct_concept: "" }); }
+    try { const { data } = await api.post("/analyze", { idea: draft.idea }); setResult(data); }
+    catch (err) { toast.error(apiError(err)); }
     finally { setLoading(false); }
   };
 
-  const buildBrandSystem = async () => {
-    if (!idea.trim()) return;
-    setLoading(true);
-    try { const { data } = await axios.post(`${API}/workflow`, { idea, audience, constraints }); setWorkflow(data); setActiveStage(0); }
-    catch (error) { setWorkflow({ error: "The six-stage engine is temporarily unavailable. Try again shortly." }); }
+  const build = async () => {
+    setLoading(true); setProject(null); setResult(null);
+    try { const { data } = await api.post("/workflow", draft); setProject(data); setTitleDraft(data.title); setActiveStage(0); loadHistory(); toast.success("Brand system saved to your projects."); }
+    catch (err) { toast.error(apiError(err, "The six-stage engine is temporarily unavailable. Try again shortly.")); }
     finally { setLoading(false); }
   };
+
+  const deleteProject = async (id) => {
+    try { await api.delete(`/workflows/${id}`); if (project?.id === id) newProject(); loadHistory(); toast("Project deleted."); }
+    catch (err) { toast.error(apiError(err)); }
+  };
+
+  const rename = async () => {
+    const title = titleDraft.trim();
+    if (!project || !title || title === project.title) { setTitleDraft(project?.title || ""); return; }
+    try { await api.patch(`/workflows/${project.id}`, { title }); setProject({ ...project, title }); loadHistory(); }
+    catch (err) { toast.error(apiError(err)); }
+  };
+
+  const onChatUpdate = (data) => { setProject(data); loadHistory(); };
 
   return <main className="shell">
     <div className="grain" />
-    <aside className={menuOpen ? "sidebar open" : "sidebar"} data-testid="navigation-sidebar">
-      <div className="brand"><span className="brand-mark"><span /></span><span>ANTI<br /><em>GENERIC</em></span></div>
-      <button className="close-menu" onClick={() => setMenuOpen(false)} data-testid="close-menu-button"><X size={18} /></button>
-      <div className="side-label">Workspace / 01</div>
-      <nav className="nav-list">
-        <button className="nav-item active" data-testid="nav-analyze"><BrainCircuit size={17} /> Analyze <span>01</span></button>
-        <button className="nav-item" data-testid="nav-transform"><Sparkles size={17} /> Transform <span>02</span></button>
-        <button className="nav-item" data-testid="nav-playground"><Compass size={17} /> Playground <span>03</span></button>
-      </nav>
-      <div className="sidebar-footer"><div className="status-dot" /> ENGINE ONLINE <span>v0.8</span></div>
-    </aside>
+    <Sidebar open={menuOpen} onClose={() => setMenuOpen(false)} view={view} onView={(v) => { setView(v); setMenuOpen(false); }} history={history} activeId={project?.id} onOpenProject={openProject} onNewProject={newProject} onDeleteProject={deleteProject} />
     <section className="content">
-      <header className="topbar"><button className="menu-button" onClick={() => setMenuOpen(true)} data-testid="open-menu-button"><Menu size={20} /></button><div className="crumb">PROJECT / <strong>UNTITLED SIGNAL</strong></div><div className="top-actions"><span className="save-status">AUTO-SAVED</span><button className="icon-button" data-testid="settings-button"><Gauge size={18} /></button><div className="avatar" data-testid="user-avatar">AG</div></div></header>
+      <header className="topbar">
+        <button className="menu-button" onClick={() => setMenuOpen(true)} data-testid="open-menu-button"><Menu size={20} /></button>
+        <div className="crumb">PROJECT / {project ? <input className="title-input" value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)} onBlur={rename} onKeyDown={(e) => e.key === "Enter" && e.target.blur()} maxLength={80} aria-label="Project title" data-testid="project-title-input" /> : <strong data-testid="project-title-draft">NEW DRAFT</strong>}</div>
+        <div className="top-actions"><span className="save-status" data-testid="save-status">{project ? "SAVED TO YOUR ACCOUNT" : loading ? "BUILDING..." : "UNSAVED DRAFT"}</span></div>
+      </header>
       <div className="page-wrap">
-        <motion.div className="intro" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .7 }}>
-          <div className="eyebrow"><span className="eyebrow-line" /> ORIGINALITY / DIAGNOSTICS</div>
-          <h1>Make the <i>familiar</i><br /><span>impossible to ignore.</span></h1>
-          <p className="lede">A thinking instrument for finding the signal inside an idea —<br className="desktop" /> before the category smooths it out.</p>
-        </motion.div>
-        <div className="workspace-grid">
-          <motion.section className="input-panel glass" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .12 }}>
-            <div className="panel-head"><div><span className="index">01</span><h2>Place your idea<br /><em>under the lens.</em></h2></div><Eye size={21} className="muted-icon" /></div>
-            <label htmlFor="idea-input">RAW MATERIAL / THE UNEDITED THOUGHT</label>
-            <textarea id="idea-input" data-testid="idea-input" value={idea} onChange={(e) => setIdea(e.target.value)} placeholder="Write the idea as it exists in your head..." />
-            <label htmlFor="audience-input">WHO IS IT FOR / THE HUMAN ON THE OTHER SIDE</label><input id="audience-input" data-testid="audience-input" value={audience} onChange={(e) => setAudience(e.target.value)} />
-            <label htmlFor="constraints-input">NON-NEGOTIABLE / THE SHARP EDGE</label><input id="constraints-input" data-testid="constraints-input" value={constraints} onChange={(e) => setConstraints(e.target.value)} />
-            <div className="input-footer"><span>{idea.length} / 500</span><div className="action-pair"><button className="secondary-button" onClick={analyze} disabled={loading} data-testid="analyze-idea-button">QUICK READ</button><button className="analyze-button" onClick={buildBrandSystem} disabled={loading} data-testid="build-brand-system-button">{loading ? "BUILDING..." : "BUILD BRAND SYSTEM"}<ArrowUpRight size={17} /></button></div></div>
+        {view === "guide" && <HowItWorks onStart={goStudio} />}
+        {view === "kit" && <SubmissionKit userId={user.id} />}
+        {view === "studio" && <>
+          <motion.div className="intro" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .7 }}>
+            <div className="eyebrow"><span className="eyebrow-line" /> ORIGINALITY / DIAGNOSTICS</div>
+            <h1>Make the <i>familiar</i><br /><span>impossible to ignore.</span></h1>
+            <p className="lede">A thinking instrument for finding the signal inside an idea —<br className="desktop" /> before the category smooths it out.</p>
+          </motion.div>
+          <IdeaPanel draft={draft} onChange={setDraft} loading={loading} onQuickRead={quickRead} onBuild={build} result={result} locked={Boolean(project)} />
+          <motion.section className="results-area" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .4 }}>
+            <div className="section-heading"><div><span className="eyebrow">02 / {project ? "SIX-STAGE BRAND SYSTEM" : "THE DIAGNOSTIC REPORT"}</span><h2>{project || result ? "Here is what the engine sees." : "Nothing generic survives a closer look."}</h2></div>{result && !project && <button className="reset-button" onClick={() => setResult(null)} data-testid="reset-analysis-button"><RotateCcw size={15} /> RESET</button>}</div>
+            {loading && !result ? <BuildProgress /> : project ? <div className="workflow-report" data-testid="workflow-report"><StageReport stages={project.stages} activeStage={activeStage} onSelect={setActiveStage} /></div> : result ? <QuickRead result={result} onBuild={build} /> : <div className="empty-report" data-testid="empty-report"><Target size={24} /><span>Run a quick read or build the six-stage system to surface the hidden structure of your idea.</span></div>}
           </motion.section>
-          <motion.section className="signal-panel" initial={{ opacity: 0, scale: .96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: .25 }}>
-            <div className="orb-wrap"><div className="orb"><div className="orb-core" /><div className="orbit orbit-a" /><div className="orbit orbit-b" /></div><span className="orb-tag">SIGNAL<br />FIELD</span></div>
-            <div className="signal-copy"><span className="index">LIVE MODEL</span><h3>{result ? "Your idea has a pulse." : <>Your idea is<br /><em>waiting for a pulse.</em></>}</h3><p>{result ? result.verdict : "Submit a raw thought to map its tension, residue, and point of view."}</p></div>
-          </motion.section>
-        </div>
-        <motion.section className="results-area" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .4 }}>
-          <div className="section-heading"><div><span className="eyebrow">{result ? "02 / DIAGNOSTIC REPORT" : "02 / THE DIAGNOSTIC REPORT"}</span><h2>{result ? "Here is what the engine sees." : "Nothing generic survives a closer look."}</h2></div>{result && <button className="reset-button" onClick={() => setResult(null)} data-testid="reset-analysis-button"><RotateCcw size={15} /> RESET</button>}</div>
-          {workflow ? <div className="workflow-report" data-testid="workflow-report">{workflow.error ? <div className="empty-report">{workflow.error}</div> : <><div className="stage-rail">{workflow.stages.map((stage, index) => <button className={activeStage === index ? "stage-tab active" : "stage-tab"} onClick={() => setActiveStage(index)} key={stage.key} data-testid={`stage-tab-${stage.key}`}><span>{String(index + 1).padStart(2, "0")}</span>{stage.name}<>{activeStage > index && <Check size={13} />}</></button>)}</div><div className="stage-detail glass" data-testid="active-stage-detail"><div className="stage-title"><span className="index">STAGE {String(activeStage + 1).padStart(2, "0")} / STRUCTURED OUTPUT</span><h3>{workflow.stages[activeStage].name}</h3><p>{workflow.stages[activeStage].summary}</p></div><div className="decision-grid">{workflow.stages[activeStage].decisions?.map((decision) => <div className="decision" key={decision.label}><span>{decision.label}</span><p>{decision.value}</p></div>)}</div><div className="tension-row"><div><span className="index">TENSIONS TO RESOLVE</span>{workflow.stages[activeStage].tensions?.map((tension) => <p key={tension}>↳ {tension}</p>)}</div><div className="next-question"><span className="index">NEXT QUESTION</span><p>{workflow.stages[activeStage].next_question}</p></div></div></div></>}</div> : !result ? <div className="empty-report" data-testid="empty-report"><Target size={24} /><span>Run a quick read or build the six-stage system to surface the hidden structure of your idea.</span></div> : <div className="report-grid" data-testid="analysis-report"><div className="score-card glass"><span className="index">DISTINCTION INDEX</span><div className="score">{result.score}<small>/100</small></div><div className="score-bar"><span style={{ width: `${result.score}%` }} /></div><p>{result.verdict}</p></div><div className="diagnosis-card glass"><span className="index">THE READ</span><p className="diagnosis">{result.diagnosis}</p><div className="signal-list">{result.signals.map((signal) => <div className="signal-row" key={signal.label}><span>{signal.label}</span><div className="mini-bar"><i style={{ width: `${signal.value}%` }} /></div><b>{signal.value}</b></div>)}</div></div><div className="unlock-card"><span className="index">NEXT UNLOCKS</span>{result.unlocks.map((unlock, i) => <div className="unlock" key={unlock}><span>0{i + 1}</span>{unlock}<ArrowUpRight size={15} /></div>)}</div><div className="concept-card"><span className="index">DISTINCTIVE CONCEPT / GENERATED</span><p>{result.distinct_concept}</p><button data-testid="save-concept-button">SAVE TO PLAYGROUND <ArrowUpRight size={16} /></button></div></div>}
-        </motion.section>
-        <section className="submission-kit" data-testid="submission-kit">
-          <div className="section-heading"><div><span className="eyebrow">03 / HACKATHON SUBMISSION KIT</span><h2>Make the work easy to judge.</h2></div><span className="kit-status" data-testid="submission-kit-status">{Object.values(links).filter(Boolean).length} / 3 LINKS READY</span></div>
-          <div className="kit-grid"><div className="kit-card glass"><span className="index">PROJECT IDENTITY</span><label>PROJECT NAME<input data-testid="project-name-input" value={projectName} onChange={(e) => setProjectName(e.target.value)} /></label><label>TEAM NAME<input data-testid="team-name-input" value={teamName} onChange={(e) => setTeamName(e.target.value)} /></label><p className="kit-description">{projectName} — a six-stage AI brand intelligence workflow that challenges generic thinking before it ships.</p></div><div className="kit-card glass"><span className="index">REQUIRED LINKS</span>{[["repo","PUBLIC REPOSITORY"],["live","LIVE PRODUCT"],["demo","2–4 MINUTE DEMO VIDEO"]].map(([key,label]) => <label key={key}>{label}<input data-testid={`${key}-link-input`} placeholder="Paste link when ready" value={links[key]} onChange={(e) => setLinks({ ...links, [key]: e.target.value })} /></label>)}</div><div className="kit-card checklist-card"><span className="index">DEMO RUN OF SHOW</span>{["State the user and the genericity problem", "Enter a realistic idea with audience + constraint", "Walk through all six structured stages", "Highlight the Challenge Generic stage", "Show the launch-ready output and decision value"].map((item, index) => <label className="check-row" key={item}><input type="checkbox" data-testid={`demo-check-${index + 1}`} /> <span>{item}</span></label>)}<p className="inkloom-note">INKLOOM / EARLY ACCESS CODE <strong>INKLOOM-WCC</strong> · inkloom.art</p></div></div>
-        </section>
+          {project && <ProjectChat project={project} onUpdate={onChatUpdate} />}
+        </>}
       </div>
     </section>
   </main>;
 }
 
-export default App;
+function Gate() {
+  const { user } = useAuth();
+  if (user === null) return <div className="boot" data-testid="boot-screen"><div className="status-dot" /> OPENING THE LENS</div>;
+  return user ? <Workspace /> : <AuthScreen />;
+}
+
+export default function App() {
+  return <AuthProvider><Gate /><Toaster position="bottom-right" theme="dark" toastOptions={{ style: { background: "#101014", border: "1px solid rgba(255,255,255,.11)", color: "#f2f0e9", fontFamily: "DM Mono, monospace", fontSize: 12 } }} /></AuthProvider>;
+}
