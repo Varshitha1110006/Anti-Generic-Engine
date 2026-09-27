@@ -16,7 +16,7 @@ import uuid
 import json
 import re
 from datetime import datetime, timezone
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta
+from groq import Groq
 from auth import build_auth_router, ensure_auth_indexes, seed_demo_user
 
 # MongoDB connection
@@ -102,11 +102,23 @@ ENGINE_SYSTEM = "You are the Anti Generic Engine, a rigorous brand strategist. Y
 
 
 async def stream_llm(system: str, prompt: str) -> str:
-    chat = LlmChat(api_key=os.environ["EMERGENT_LLM_KEY"], session_id=f"anti-generic-{uuid.uuid4()}", system_message=system).with_model(*LLM_MODEL)
+    client_groq = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+    
+    # Map your model to Groq's supported models (e.g., llama-3.3-70b-versatile)
+    response = client_groq.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt}
+        ],
+        stream=True
+    )
+    
     chunks = []
-    async for event in chat.stream_message(UserMessage(text=prompt)):
-        if isinstance(event, TextDelta):
-            chunks.append(event.content)
+    for chunk in response:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            chunks.append(delta)
     return "".join(chunks).strip()
 
 
