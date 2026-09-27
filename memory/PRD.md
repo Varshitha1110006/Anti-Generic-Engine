@@ -18,9 +18,13 @@ One guided originality journey: submit a raw idea, understand the generic residu
 - Added idea input, diagnostics submission, loading state, score, verdict, signal bars, unlocks, and generated distinctive concept.
 - Added reset behavior, mobile drawer navigation, motion-safe animation, grain texture, 3D-style signal orb, and responsive layouts.
 - Added `data-testid` coverage for core interaction and report elements.
+- Added a real six-stage AI workflow using the Emergent universal key and streamed LLM calls: Understand, Personality, Challenge Generic, Visualize, Test Consistency, and Launch.
+- Added audience and constraint inputs, structured stage tabs, decisions, tensions, next questions, workflow persistence, and public workflow retrieval.
+- Partial AI workflows fail safely with HTTP 503 and are never persisted as complete brand systems.
 
 ## Prioritized backlog
-- P0: Connect analysis to a real configurable reasoning model and persist project history.
+- P0: Add a submission kit screen with project metadata, contribution details, demo script, and required link checklist.
 - P1: Build the Transform and Playground sections as interactive guided stages.
 - P1: Add editable signal cards and concept branching so users can compare multiple directions.
-- P2: Add export/share view for a finished originality report.
+- P1: Add a shareable/exportable final brand kit assembled from the six stage outputs.
+- P2: Add project history browsing and compare multiple workflow runs.

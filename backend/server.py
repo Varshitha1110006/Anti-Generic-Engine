@@ -107,8 +107,7 @@ async def run_workflow(input: WorkflowRequest):
             context["stages"] = stages
     except Exception as exc:
         logging.exception("AI workflow failed at stage %s", len(stages) + 1)
-        if not stages:
-            raise HTTPException(status_code=503, detail="The reasoning engine is temporarily unavailable.") from exc
+        raise HTTPException(status_code=503, detail="The reasoning engine could not complete every stage. No partial brand system was saved.") from exc
     created_at = datetime.now(timezone.utc).isoformat()
     doc = {"id": workflow_id, "idea": input.idea, "audience": input.audience, "constraints": input.constraints, "stages": stages, "created_at": created_at}
     await db.workflows.insert_one({**doc})
