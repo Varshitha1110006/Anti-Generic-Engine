@@ -2,7 +2,9 @@ import axios from "axios";
 
 export const TOKEN_KEY = "age_token";
 
-export const api = axios.create({ baseURL: `${process.env.REACT_APP_BACKEND_URL}/api` });
+export const api = axios.create({
+  baseURL: "https://anti-generic-backend.onrender.com/api"
+});
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem(TOKEN_KEY);

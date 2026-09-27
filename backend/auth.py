@@ -1,16 +1,18 @@
 import os
 import uuid
 from datetime import datetime, timezone, timedelta
-
+from typing import Any
 import bcrypt
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, EmailStr, Field
 
 JWT_ALGORITHM = "HS256"
 LOCKOUT_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
+security = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -54,11 +56,16 @@ def public_user(doc: dict) -> dict:
     return {"id": doc["id"], "name": doc["name"], "email": doc["email"], "role": doc.get("role", "user"), "created_at": doc["created_at"]}
 
 
-def build_auth_router(db: AsyncIOMotorDatabase) -> tuple[APIRouter, callable]:
+def build_auth_router(db: Any) -> tuple[APIRouter, callable]:
     router = APIRouter(prefix="/auth", tags=["auth"])
 
-    async def get_current_user(request: Request) -> dict:
+    async def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> dict:
         token = request.cookies.get("access_token")
+        if not token and credentials:
+            token = credentials.credentials
         header = request.headers.get("Authorization", "")
         if header.startswith("Bearer "):
             token = header[7:]
@@ -117,13 +124,13 @@ def build_auth_router(db: AsyncIOMotorDatabase) -> tuple[APIRouter, callable]:
     return router, get_current_user
 
 
-async def ensure_auth_indexes(db: AsyncIOMotorDatabase):
+async def ensure_auth_indexes(db: Any):
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
     await db.login_attempts.create_index("identifier")
 
 
-async def seed_demo_user(db: AsyncIOMotorDatabase):
+async def seed_demo_user(db: Any):
     accounts = [(os.environ["DEMO_EMAIL"], os.environ["DEMO_PASSWORD"], "Studio Owner", "owner"), (os.environ["JUDGE_EMAIL"], os.environ["JUDGE_PASSWORD"], "Inkloom Judge", "judge")]
     for email, password, name, role in accounts:
         email = email.lower()
