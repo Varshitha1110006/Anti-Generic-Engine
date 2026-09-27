@@ -1,0 +1,62 @@
+{
+  "app_name": "The Anti-AI Designer & Engine",
+  "theme": "Cinematic Dark Editorial & Futuristic Laboratory (Archetype 5 Luxury / Electric Void)",
+  "typography": {
+    "headings": "Instrument Serif / Syne / Unbounded",
+    "body": "DM Sans / JetBrains Mono"
+  },
+  "colors": {
+    "primary_void": "#070709",
+    "obsidian_card": "#0F0F13",
+    "electric_accent": "#00F0FF",
+    "vivid_amber": "#FF3366",
+    "text_main": "#F8FAFC",
+    "text_muted": "#94A3B8",
+    "border_subtle": "rgba(255, 255, 255, 0.08)"
+  },
+  "visual_enhancers": [
+    "SVG grain noise overlay",
+    "Backdrop blur glassmorphism (backdrop-blur-xl bg-black/60 border border-white/10)",
+    "Tracing beam glowing borders",
+    "Asymmetric Bento grid architecture",
+    "Micro-interactive hover scales & spring physics"
+  ],
+  "grids": {
+    "tetris_bento_marketing": "grid-cols-1 md:grid-cols-12 gap-8",
+    "high_density_dashboard": "grid-cols-1 md:grid-cols-4 gap-6"
+  },
+  "motion": {
+    "spring_transition": "transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+    "staggered_fade": "framer-motion viewport trigger with custom spring"
+  },
+  "accessibility": {
+    "contrast": "APCA and WCAG AA compliant (>4.5:1 text, >3:1 interactive)",
+    "prefers_reduced_motion": "Supported via CSS media query override",
+    "test_attributes": "All interactive elements include data-testid attributes"
+  },
+  "image_urls": [
+    {
+      "category": "hero_background",
+      "url": "https://images.unsplash.com/photo-1634834300387-8015d9fb7550?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwyfHxmdXR1cmlzdGljJTIwZ2xvd2luZyUyMG5lb24lMjBsYWJvcmF0b3J5JTIwM2QlMjBhYnN0cmFjdCUyMGFydHxlbnwwfHx8fDE3OTA0ODIwNDF8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Futuristic neon laboratory tunnel 3D abstract art"
+    },
+    {
+      "category": "transformation_banner",
+      "url": "https://images.unsplash.com/photo-1488972685288-c3fd157d7c7a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwyfHxkYXJrJTIwbWluaW1hbGlzdCUyMGVkaXRvcmlhbCUyMGFyY2hpdGVjdHVyZSUyMGFic3RyYWN0JTIwYXJ0fGVufDB8fHx8MTc5MDQ4MjA0MXww&ixlib=rb-4.1.0&q=85",
+      "description": "Dark minimalist editorial architecture"
+    },
+    {
+      "category": "playground_visual",
+      "url": "https://images.unsplash.com/photo-1637166185518-058f5896a2e9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwxfHxmdXR1cmlzdGljJTIwZ2xvd2luZyUyMG5lb24lMjBsYWJvcmF0b3J5JTIwM2QlMjBhYnN0cmFjdCUyMGFydHxlbnwwfHx8fDE3OTA0ODIwNDF8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Futuristic glowing abstract blue hall"
+    }
+  ],
+  "instructions_to_main_agent": "Build a stunning React frontend with custom Tailwind styles, Lucide icons, Framer Motion animations, Sonner toasts, and clean FastAPI backend endpoints for idea analysis, genericity diagnosis, distinctive transformation, and originality signal exploration. Every interactive element must have a data-testid attribute.",
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "Avoid AI slop: no generic Inter headings, no purple-to-blue gradients, no uniform 3-column cards.",
+    "Use generous spacing (p-8, p-12, gap-8), asymmetric Bento grid layouts, and custom glassmorphism surfaces.",
+    "Ensure 100% of interactive elements have explicit hover/focus/active states with proper contrast and data-testid attributes.",
+    "Never use transparent backgrounds without blur or scrim over images.",
+    "Never use universal transition: all; apply targeted transitions."
+  ]
+}
