@@ -8,9 +8,9 @@ One guided originality journey: submit a raw idea, understand the generic residu
 
 ## Architecture decisions
 - React frontend with Framer Motion, Lucide icons, responsive CSS, and the existing API environment variable.
-- FastAPI backend with a deterministic analysis endpoint at `POST /api/analyze`.
-- MongoDB connection remains available through the existing configured environment, but analysis does not require persistence yet.
-- No authentication or external AI credentials are required for this first product slice.
+- FastAPI backend with JWT auth (`/api/auth/*`), user-scoped projects (`/api/workflows*`), per-project chat with memory, and a deterministic quick read at `POST /api/analyze`.
+- MongoDB collections: `users`, `workflows` (user_id, title, idea, audience, constraints, stages[], messages[], created_at, updated_at), `login_attempts`.
+- LLM: Emergent universal key, OpenAI gpt-5.4 via emergentintegrations.
 
 ## Implemented
 - Replaced the starter splash screen with a complete Anti Generic Engine workspace.
@@ -23,9 +23,16 @@ One guided originality journey: submit a raw idea, understand the generic residu
 - Partial AI workflows fail safely with HTTP 503 and are never persisted as complete brand systems.
 - Added a hackathon submission kit with project/team identity, repository/live/demo link tracking, demo run-of-show checklist, and Inkloom credit reference.
 
+### 2026-09-27 — Accounts, history and chat memory
+- JWT email/password auth (`/app/backend/auth.py`): register, login, me, logout; bcrypt hashing, 5-attempt lockout, idempotent demo user seed (`demo@antigeneric.app / Demo1234!`).
+- Projects are scoped to the signed-in user: list (newest first), open, rename, delete. Sidebar shows "Recent projects" like a chat history rail.
+- Follow-up chat per project (`POST /api/workflows/{id}/chat`): the engine receives all six stage outputs plus prior messages, replies are persisted, and reload restores the thread.
+- Frontend split into components: AuthScreen, Sidebar, IdeaPanel, StageReport (+BuildProgress), QuickRead, ProjectChat, SubmissionKit, HowItWorks; AuthContext + axios client with Bearer token.
+- New "How it works" view listing the five features with a 90-second demo path; Submission Kit persists on-device per user.
+- Testing: iteration_4 — 12/12 backend pytest, all frontend flows pass (auth, persistence, history, chat memory, isolation, nav, mobile).
+
 ## Prioritized backlog
-- P0: Add a submission kit screen with project metadata, contribution details, demo script, and required link checklist.
-- P1: Build the Transform and Playground sections as interactive guided stages.
-- P1: Add editable signal cards and concept branching so users can compare multiple directions.
-- P1: Add a shareable/exportable final brand kit assembled from the six stage outputs.
-- P2: Add project history browsing and compare multiple workflow runs.
+- P1: Export/share a final brand kit (PDF or public link) assembled from the six stages + chat decisions.
+- P1: Editable signal cards and concept branching so users can compare multiple directions.
+- P2: Compare two saved projects side by side.
+- P2: Password reset via email.

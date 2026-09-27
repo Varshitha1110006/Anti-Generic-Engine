@@ -1,0 +1,34 @@
+{
+  "summary": "Verified new JWT auth, per-user project history, follow-up chat with memory, cross-user isolation, navigation (studio/kit/guide), and responsive (390px) menu behavior for the Anti Generic Engine. Backend: 12/12 pytest cases passed (register/login/me/lockout, analyze public, project isolation, cross-user 404, protected-endpoint 401, chat persistence on demo project). Frontend: demo login, reload persistence, history open, 6 stage tabs, project chat (assistant reply + memory counter '3 EXCHANGES SAVED'), rename, new-project reset, nav flows, logout, duplicate-email register error, mobile open/close menu, fresh-user history-empty state — all pass. No crashes, no console errors during happy paths (only the expected 409 on duplicate register).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_auth_and_projects.py",
+    "/app/backend/tests/test_anti_generic_workflow.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "auth.py check_lockout: identifier keyed by client.host + email. Behind proxies (e.g. Cloudflare) all users may share the same client.host, so a single attacker can lock out other users of the same email. Consider using X-Forwarded-For or keying by email only with a longer window.",
+    "auth.py: password minimum length is 6 (very weak). Consider raising to 8+ and enforcing complexity.",
+    "server.py: /api/workflow can spend 60-150s inside a single request without a client-cancellation guard; a client disconnect still runs all six LLM calls. Consider background task + polling, or an early cancellation check.",
+    "server.py stream_llm: creates a new session_id per call, so LlmChat cannot leverage server-side context between stages — context is only replayed via prompt. Working correctly but noted.",
+    "Short-password on the register form is enforced only via the browser's native minLength popup; the client never round-trips to receive the 422 array. This is fine, but the auth-error component should still be resilient to receiving an array detail from the backend (recommend always coercing to string before render if not already)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auth_and_projects.py",
+    "/app/test_reports/iteration_4.json",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% of executed scenarios"},
+  "test_credentials": "demo@antigeneric.app / Demo1234! (seeded). Additional TEST_ users created dynamically via /api/auth/register.",
+  "seed_data_creation": "Created several TEST_ users (test_a_*, test_b_*, lock_*, test_ui_*) via /api/auth/register during backend + frontend tests. One existing demo project 'Chef Notebook' (id d24ff992-...) was renamed via UI test to 'TEST Renamed 528' and had 2 chat exchanges added (final count '3 EXCHANGES SAVED').",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend tests live in /app/backend/tests/test_auth_and_projects.py (parallelized). The full 6-stage /api/workflow build is expensive (~60-150s) and is NOT covered by pytest to save time; it is exercised implicitly by reusing the demo project for chat/history assertions. If you need to test the build itself, budget ~180s and add a single test with a generous timeout. Note: the demo project title was mutated during frontend tests (rename) — this is expected and safe to leave. Cloudflare on the preview URL accepts a browser-like UA (test file sends 'Mozilla/5.0 pytest-backend' and works). Password lockout is IP+email keyed; running the lockout test many times in a row may temporarily 429 subsequent logins from the same host — the fixture registers a fresh email each run to avoid contaminating the demo account.",
+  "rca of the issue": "No blocking issues found in this iteration."
+}
