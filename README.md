@@ -21,6 +21,12 @@ Instead of simply generating generic ideas, the platform analyzes an idea and he
 
 Users can create an account, sign in, submit ideas, and continue working with their saved projects.
 
+> **🔐 Important Note – Login & Usage:**  
+> Users can create an account and log in using the same email/username and password they provided during registration. The email/username field does not require a real Gmail account; values such as `user@example.com` can be used as an example. The same credentials can be used to access the account from different devices.
+>
+> **💳 Usage & Charges:**  
+> The platform provides limited usage for regular users, while judges have designated access for project evaluation. Usage limits and applicable charges may vary depending on the type of user and platform usage.
+
 ## ✨ Key Features
 
 - User registration and login
