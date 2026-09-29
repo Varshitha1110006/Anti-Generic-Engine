@@ -28,12 +28,12 @@ def _login(session, email, password):
 
 @pytest.fixture(scope="module")
 def owner(session):
-    return _login(session, "demo@antigeneric.app", "Demo1234!")
+    return _login(session,os.environ["DEMO_EMAIL"],os.environ["DEMO_PASSWORD"],)
 
 
 @pytest.fixture(scope="module")
 def judge(session):
-    return _login(session, "judge@antigeneric.app", "Inkloom-Judge-2026")
+    return _login(session,os.environ["JUDGE_EMAIL"],os.environ["JUDGE_PASSWORD"],)
 
 
 @pytest.fixture(scope="module")

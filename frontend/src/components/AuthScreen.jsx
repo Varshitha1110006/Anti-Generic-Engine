@@ -53,12 +53,6 @@ export function AuthScreen() {
         {error && <p className="auth-error" role="alert" data-testid="auth-error">{error}</p>}
         <button className="analyze-button auth-submit" type="submit" disabled={busy} data-testid="auth-submit-button">{busy ? "OPENING THE LENS..." : mode === "login" ? "ENTER THE STUDIO" : "CREATE MY ACCOUNT"}<ArrowUpRight size={17} /></button>
       </form>
-      <div className="judge-access" data-testid="judge-access-card">
-        <span className="index">FOR HACKATHON JUDGES / SHARED ACCESS</span>
-        <p>No personal account needed. Use the shared judge login to open the saved projects and conversations prepared for review, and try the engine live with a daily allowance.</p>
-        <div className="judge-creds"><code data-testid="judge-email">judge@antigeneric.app</code><code data-testid="judge-password">Inkloom-Judge-2026</code></div>
-        <button type="button" className="secondary-button judge-button" disabled={busy} onClick={() => quickLogin("judge@antigeneric.app", "Inkloom-Judge-2026")} data-testid="judge-login-button"><Lock size={12} /> ENTER AS JUDGE</button>
-      </div>
     </motion.section>
   </main>;
 }
