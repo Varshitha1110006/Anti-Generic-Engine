@@ -31,8 +31,8 @@ The Judge Login section was available in the version shown in our demonstration 
 
 The application is successfully deployed and working. The credentials below are provided only for the purpose of hackathon evaluation.
 
-**Judge Email:** YOUR_JUDGE_EMAIL  
-**Judge Password:** YOUR_JUDGE_PASSWORD
+**Judge Email:** judge@antigeneric.app 
+**Judge Password:** Inkloom-Judge-2026
 
 > The current deployed website may look slightly different from the version shown in the demonstration video because the Judge Login section was removed afterward for security and privacy reasons.
 >
