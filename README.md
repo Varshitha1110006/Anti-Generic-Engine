@@ -23,6 +23,18 @@ Users can create an account, sign in, submit ideas, and continue working with th
 
 > **🔐 Important Note – Login & Usage:**  
 > Users can create an account and log in using the same email/username and password they provided during registration. The email/username field does not require a real Gmail account; values such as `user@example.com` can be used as an example. The same credentials can be used to access the account from different devices.
+> ## Judge Login Credentials
+
+### Important Note for Judges
+
+The Judge Login section was available in the version shown in our demonstration video. After the video was recorded, the Judge Login section was removed from the deployed website to avoid displaying the credentials directly on the website.
+
+The application is successfully deployed and working. The credentials below are provided only for the purpose of hackathon evaluation.
+
+**Judge Email:** YOUR_JUDGE_EMAIL  
+**Judge Password:** YOUR_JUDGE_PASSWORD
+
+> The current deployed website may look slightly different from the version shown in the demonstration video because the Judge Login section was removed afterward for security and privacy reasons.
 >
 > **💳 Usage & Charges:**  
 > The platform provides limited usage for regular users, while judges have designated access for project evaluation. Usage limits and applicable charges may vary depending on the type of user and platform usage.
